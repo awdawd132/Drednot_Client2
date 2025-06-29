@@ -1,4 +1,4 @@
-# drednot_bot.py (Final Version with Proactive Scan + Live Wait)
+# drednot_bot.py (Final Version with Proactive Scan + Live Wait + Idempotency Fix)
 
 import os
 import re
@@ -36,7 +36,7 @@ if not BOT_SERVER_URL:
     print("CRITICAL: BOT_SERVER_URL environment variable is not set!")
     exit(1)
 
-# --- JAVASCRIPT INJECTION SCRIPT (WITH SMART PARSING) ---
+# --- JAVASCRIPT INJECTION SCRIPT (WITH IDEMPOTENCY FIX) ---
 MUTATION_OBSERVER_SCRIPT = """
     console.log('[Bot-JS] Initializing Smart MutationObserver...');
     window.py_bot_events = []; // Holds events for Python to poll
@@ -50,7 +50,8 @@ MUTATION_OBSERVER_SCRIPT = """
         for (const mutation of mutationList) {
             if (mutation.type === 'childList') {
                 for (const node of mutation.addedNodes) {
-                    if (node.nodeType !== 1 || node.tagName !== 'P') continue;
+                    // *** FIX: Ignore already processed nodes or non-element nodes.
+                    if (node.nodeType !== 1 || node.tagName !== 'P' || node.dataset.botProcessed) continue;
 
                     const pText = node.textContent || "";
                     if (pText.startsWith(zwsp)) continue;
@@ -79,6 +80,9 @@ MUTATION_OBSERVER_SCRIPT = """
 
                         // Only process if it's a valid command
                         if (allCommands.includes(command)) {
+                            // *** FIX: Mark the node as processed BEFORE queueing the event.
+                            node.dataset.botProcessed = 'true';
+
                             window.py_bot_events.push({
                                 type: 'command',
                                 command: command,
@@ -95,6 +99,7 @@ MUTATION_OBSERVER_SCRIPT = """
     observer.observe(targetNode, { childList: true });
     console.log('[Bot-JS] Smart MutationObserver is now active.');
 """
+
 
 class InvalidKeyError(Exception): pass
 
@@ -242,10 +247,7 @@ def start_bot(use_key_login):
         WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.ID, "chat-input")));
         print("[SYSTEM] Injecting Smart MutationObserver for chat..."); driver.execute_script(MUTATION_OBSERVER_SCRIPT, ZWSP, ALL_COMMANDS); log_event("Chat observer active.")
 
-        # --- FINAL, ROBUST FIX ---
         ship_id_found = False
-        
-        # 1. PROACTIVELY SCAN existing chat for the ID
         print("[SYSTEM] Proactively scanning existing chat for Ship ID...")
         log_event("Proactively scanning for Ship ID...")
         PROACTIVE_SCAN_SCRIPT = """
@@ -271,7 +273,6 @@ def start_bot(use_key_login):
             log_event(f"Confirmed Ship ID via scan: {found_id}")
             print(f"✅ Confirmed Ship ID via scan: {found_id}")
         else:
-            # 2. If not found, FALLBACK to waiting for the live event
             print("[SYSTEM] No existing ID found. Waiting for live event...")
             log_event("Waiting for live 'join' event...")
             start_time = time.time()
@@ -292,7 +293,6 @@ def start_bot(use_key_login):
             error_message = "Failed to get Ship ID via scan or live event."
             log_event(f"CRITICAL: {error_message}")
             raise RuntimeError(error_message)
-        # --- END OF FIX ---
 
     BOT_STATE["status"] = "Running"; queue_reply("Hello"); reset_inactivity_timer(); print(f"Event-driven chat monitor active. Polling every {MAIN_LOOP_POLLING_INTERVAL_SECONDS}s.")
     while True:
