@@ -1,4 +1,4 @@
-# drednot_bot.py (Final Version with Robust Startup Logic)
+# drednot_bot.py (Final Version with Proactive Scan + Live Wait)
 
 import os
 import re
@@ -29,7 +29,7 @@ ZWSP = '\u200B'
 INACTIVITY_TIMEOUT_SECONDS = 2 * 60
 MAIN_LOOP_POLLING_INTERVAL_SECONDS = 1.0
 
-ANONYMOUS_LOGIN_KEY = '_M85tFxFxIRDax_nh-HYm1gT'
+ANONYMOUS_LOGIN_KEY = '_M85tFxFxIRDax_nh-HYm1gT' # Replace with your key if needed
 SHIP_INVITE_LINK = 'https://drednot.io/invite/KOciB52Quo4z_luxo7zAFKPc'
 
 if not BOT_SERVER_URL:
@@ -39,7 +39,7 @@ if not BOT_SERVER_URL:
 # --- JAVASCRIPT INJECTION SCRIPT (WITH SMART PARSING) ---
 MUTATION_OBSERVER_SCRIPT = """
     console.log('[Bot-JS] Initializing Smart MutationObserver...');
-    window.py_bot_events = []; // Changed name to reflect it holds events now
+    window.py_bot_events = []; // Holds events for Python to poll
     const zwsp = arguments[0];
     const allCommands = arguments[1]; // Receive the command list from Python
 
@@ -64,7 +64,6 @@ MUTATION_OBSERVER_SCRIPT = """
                         continue;
                     }
 
-                    // --- THIS IS THE FIX ---
                     // Handle command events by parsing the HTML structure
                     const colonIdx = pText.indexOf(':');
                     if (colonIdx === -1) continue;
@@ -88,7 +87,6 @@ MUTATION_OBSERVER_SCRIPT = """
                             });
                         }
                     }
-                    // --- END OF FIX ---
                 }
             }
         }
@@ -229,17 +227,10 @@ def start_bot(use_key_login):
                 print("Attempting to log in with anonymous key."); log_event("Attempting login with key.")
                 link = wait.until(EC.presence_of_element_located((By.XPATH, "//a[contains(., 'Restore old anonymous key')]"))); driver.execute_script("arguments[0].click();", link); print("Clicked 'Restore old anonymous key'.")
                 wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'div.modal-window input[maxlength="24"]'))).send_keys(ANONYMOUS_LOGIN_KEY)
-
                 submit_btn = wait.until(EC.presence_of_element_located((By.XPATH, "//div[.//h2[text()='Restore Account Key']]//button[contains(@class, 'btn-green')]")));
-                driver.execute_script("arguments[0].click();", submit_btn)
-                print("Submitted key.")
-
-                print("Waiting for login modal to close...")
-                wait.until(EC.invisibility_of_element_located((By.XPATH, "//div[.//h2[text()='Restore Account Key']]")))
-                print("Login modal closed.")
-
+                driver.execute_script("arguments[0].click();", submit_btn); print("Submitted key.")
+                wait.until(EC.invisibility_of_element_located((By.XPATH, "//div[.//h2[text()='Restore Account Key']]"))); print("Login modal closed.")
                 wait.until(EC.any_of(EC.presence_of_element_located((By.ID, "chat-input")), EC.presence_of_element_located((By.XPATH, "//h2[text()='Login Failed']"))))
-
                 if driver.find_elements(By.XPATH, "//h2[text()='Login Failed']"): raise InvalidKeyError("Login Failed! Key may be invalid.")
                 print("✅ Successfully logged in with key."); log_event("Login with key successful.")
             else:
@@ -251,26 +242,54 @@ def start_bot(use_key_login):
         WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.ID, "chat-input")));
         print("[SYSTEM] Injecting Smart MutationObserver for chat..."); driver.execute_script(MUTATION_OBSERVER_SCRIPT, ZWSP, ALL_COMMANDS); log_event("Chat observer active.")
 
-        # --- THIS IS THE ROBUST FIX ---
-        print("[SYSTEM] Waiting for ship join confirmation...")
-        log_event("Waiting for ship ID confirmation...")
+        # --- FINAL, ROBUST FIX ---
         ship_id_found = False
-        start_time = time.time()
-        while time.time() - start_time < 20: # 20 second timeout
-            new_events = driver.execute_script("return window.py_bot_events.splice(0, window.py_bot_events.length);")
-            for event in new_events:
-                if event['type'] == 'ship_joined':
-                    BOT_STATE["current_ship_id"] = event['id']
-                    ship_id_found = True
-                    log_event(f"Confirmed Ship ID: {BOT_STATE['current_ship_id']}")
-                    print(f"✅ Confirmed Ship ID: {BOT_STATE['current_ship_id']}")
-                    break # Exit inner loop
-            if ship_id_found:
-                break # Exit outer loop
-            time.sleep(0.5)
+        
+        # 1. PROACTIVELY SCAN existing chat for the ID
+        print("[SYSTEM] Proactively scanning existing chat for Ship ID...")
+        log_event("Proactively scanning for Ship ID...")
+        PROACTIVE_SCAN_SCRIPT = """
+            const chatContent = document.getElementById('chat-content');
+            if (!chatContent) { return null; }
+            const paragraphs = chatContent.querySelectorAll('p');
+            for (const p of paragraphs) {
+                const pText = p.textContent || "";
+                if (pText.includes("Joined ship '")) {
+                    const match = pText.match(/{[A-Z\\d]+}/);
+                    if (match && match[0]) {
+                        return match[0]; // Return the found ID
+                    }
+                }
+            }
+            return null; // Return null if not found
+        """
+        found_id = driver.execute_script(PROACTIVE_SCAN_SCRIPT)
+
+        if found_id:
+            BOT_STATE["current_ship_id"] = found_id
+            ship_id_found = True
+            log_event(f"Confirmed Ship ID via scan: {found_id}")
+            print(f"✅ Confirmed Ship ID via scan: {found_id}")
+        else:
+            # 2. If not found, FALLBACK to waiting for the live event
+            print("[SYSTEM] No existing ID found. Waiting for live event...")
+            log_event("Waiting for live 'join' event...")
+            start_time = time.time()
+            while time.time() - start_time < 15: # Reduced timeout
+                new_events = driver.execute_script("return window.py_bot_events.splice(0, window.py_bot_events.length);")
+                for event in new_events:
+                    if event['type'] == 'ship_joined':
+                        BOT_STATE["current_ship_id"] = event['id']
+                        ship_id_found = True
+                        log_event(f"Confirmed Ship ID via event: {BOT_STATE['current_ship_id']}")
+                        print(f"✅ Confirmed Ship ID via event: {BOT_STATE['current_ship_id']}")
+                        break
+                if ship_id_found:
+                    break
+                time.sleep(0.5)
 
         if not ship_id_found:
-            error_message = "Failed to get Ship ID within 20 seconds."
+            error_message = "Failed to get Ship ID via scan or live event."
             log_event(f"CRITICAL: {error_message}")
             raise RuntimeError(error_message)
         # --- END OF FIX ---
@@ -282,9 +301,9 @@ def start_bot(use_key_login):
             if new_events:
                 reset_inactivity_timer()
                 for event in new_events:
-                    if event['type'] == 'ship_joined':
-                        BOT_STATE["current_ship_id"] = event['id']
-                        log_event(f"Joined ship {BOT_STATE['current_ship_id']}")
+                    if event['type'] == 'ship_joined' and event['id'] != BOT_STATE["current_ship_id"]:
+                         BOT_STATE["current_ship_id"] = event['id']
+                         log_event(f"Switched to new ship: {BOT_STATE['current_ship_id']}")
                     elif event['type'] == 'command':
                         process_remote_command(event['command'], event['username'], event['args'])
         except WebDriverException as e: print(f"[ERROR] WebDriver exception in main loop. Assuming disconnect."); log_event(f"WebDriver error in main loop: {e.msg}"); raise
