@@ -294,7 +294,7 @@ def start_bot(use_key_login):
             raise RuntimeError(error_message)
         # --- END OF FIX ---
 
-    BOT_STATE["status"] = "Running"; queue_reply("In-Game Client Online."); reset_inactivity_timer(); print(f"Event-driven chat monitor active. Polling every {MAIN_LOOP_POLLING_INTERVAL_SECONDS}s.")
+    BOT_STATE["status"] = "Running"; queue_reply("Hello"); reset_inactivity_timer(); print(f"Event-driven chat monitor active. Polling every {MAIN_LOOP_POLLING_INTERVAL_SECONDS}s.")
     while True:
         try:
             with driver_lock: new_events = driver.execute_script("return window.py_bot_events.splice(0, window.py_bot_events.length);")
