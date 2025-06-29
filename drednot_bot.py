@@ -1,5 +1,4 @@
-
-# drednot_bot.py (Final Version with Correct Username Parsing)
+# drednot_bot.py (Final Version with Robust Startup Logic)
 
 import os
 import re
@@ -251,6 +250,30 @@ def start_bot(use_key_login):
 
         WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.ID, "chat-input")));
         print("[SYSTEM] Injecting Smart MutationObserver for chat..."); driver.execute_script(MUTATION_OBSERVER_SCRIPT, ZWSP, ALL_COMMANDS); log_event("Chat observer active.")
+
+        # --- THIS IS THE ROBUST FIX ---
+        print("[SYSTEM] Waiting for ship join confirmation...")
+        log_event("Waiting for ship ID confirmation...")
+        ship_id_found = False
+        start_time = time.time()
+        while time.time() - start_time < 20: # 20 second timeout
+            new_events = driver.execute_script("return window.py_bot_events.splice(0, window.py_bot_events.length);")
+            for event in new_events:
+                if event['type'] == 'ship_joined':
+                    BOT_STATE["current_ship_id"] = event['id']
+                    ship_id_found = True
+                    log_event(f"Confirmed Ship ID: {BOT_STATE['current_ship_id']}")
+                    print(f"✅ Confirmed Ship ID: {BOT_STATE['current_ship_id']}")
+                    break # Exit inner loop
+            if ship_id_found:
+                break # Exit outer loop
+            time.sleep(0.5)
+
+        if not ship_id_found:
+            error_message = "Failed to get Ship ID within 20 seconds."
+            log_event(f"CRITICAL: {error_message}")
+            raise RuntimeError(error_message)
+        # --- END OF FIX ---
 
     BOT_STATE["status"] = "Running"; queue_reply("In-Game Client Online."); reset_inactivity_timer(); print(f"Event-driven chat monitor active. Polling every {MAIN_LOOP_POLLING_INTERVAL_SECONDS}s.")
     while True:
