@@ -30,7 +30,7 @@ INACTIVITY_TIMEOUT_SECONDS = 2 * 60
 MAIN_LOOP_POLLING_INTERVAL_SECONDS = 1.0
 
 ANONYMOUS_LOGIN_KEY = '_M85tFxFxIRDax_nh-HYm1gT' # Replace with your key if needed
-SHIP_INVITE_LINK = 'https://drednot.io/invite/KOciB52Quo4z_luxo7zAFKPc'
+SHIP_INVITE_LINK = 'https://drednot.io/invite/DkOtAEo9xavwyVlIq0qB-HvG
 
 if not BOT_SERVER_URL:
     print("CRITICAL: BOT_SERVER_URL environment variable is not set!")
