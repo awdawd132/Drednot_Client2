@@ -25,7 +25,7 @@ from selenium.common.exceptions import WebDriverException, TimeoutException
 BOT_SERVER_URL = os.environ.get("BOT_SERVER_URL")
 API_KEY = 'drednot123'
 # --- SPEED IMPROVEMENT 1: Lowered the message sending delay ---
-MESSAGE_DELAY_SECONDS = 0.2 # From 1.2 - Drastically reduces time between sent messages.
+MESSAGE_DELAY_SECONDS = 0.5 # From 1.2 - Drastically reduces time between sent messages.
 ZWSP = '\u200B'
 INACTIVITY_TIMEOUT_SECONDS = 2 * 60
 # --- SPEED IMPROVEMENT 2: Lowered the main loop polling interval ---
