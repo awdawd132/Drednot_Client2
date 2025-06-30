@@ -1,4 +1,4 @@
-# drednot_bot.py (Final Version with Proactive Scan + Live Wait + Idempotency Fix)
+# drednot_bot.py (Faster Version)
 
 import os
 import re
@@ -24,10 +24,12 @@ from selenium.common.exceptions import WebDriverException, TimeoutException
 # --- CONFIGURATION ---
 BOT_SERVER_URL = os.environ.get("BOT_SERVER_URL")
 API_KEY = 'drednot123'
-MESSAGE_DELAY_SECONDS = 1.2
+# --- SPEED IMPROVEMENT 1: Lowered the message sending delay ---
+MESSAGE_DELAY_SECONDS = 0.2 # From 1.2 - Drastically reduces time between sent messages.
 ZWSP = '\u200B'
 INACTIVITY_TIMEOUT_SECONDS = 2 * 60
-MAIN_LOOP_POLLING_INTERVAL_SECONDS = 1.0
+# --- SPEED IMPROVEMENT 2: Lowered the main loop polling interval ---
+MAIN_LOOP_POLLING_INTERVAL_SECONDS = 0.1 # From 1.0 - Makes the bot detect commands much faster.
 
 ANONYMOUS_LOGIN_KEY = '_M85tFxFxIRDax_nh-HYm1gT' # Replace with your key if needed
 SHIP_INVITE_LINK = 'https://drednot.io/invite/DkOtAEo9xavwyVlIq0qB-HvG'
@@ -182,7 +184,7 @@ def message_processor_thread():
             clean_msg = message[1:]; print(f"[BOT-SENT] {clean_msg}"); BOT_STATE["last_message_sent"] = clean_msg; log_event(f"SENT: {clean_msg}")
         except WebDriverException: pass
         except Exception as e: print(f"[ERROR] Unexpected error in message processor: {e}"); log_event(f"UNEXPECTED ERROR in message processor: {e}")
-        time.sleep(MESSAGE_DELAY_SECONDS)
+        time.sleep(MESSAGE_DELAY_SECONDS) # This delay is now much shorter
 
 def process_remote_command(command, username, args):
     reset_inactivity_timer(); command_str = f"!{command} {' '.join(args)}"; print(f"[BOT-RECV] {command_str} from {username}"); BOT_STATE["last_command_info"] = f"{command_str} (from {username})"; log_event(f"RECV: {command_str} from {username}")
@@ -307,7 +309,7 @@ def start_bot(use_key_login):
                     elif event['type'] == 'command':
                         process_remote_command(event['command'], event['username'], event['args'])
         except WebDriverException as e: print(f"[ERROR] WebDriver exception in main loop. Assuming disconnect."); log_event(f"WebDriver error in main loop: {e.msg}"); raise
-        time.sleep(MAIN_LOOP_POLLING_INTERVAL_SECONDS)
+        time.sleep(MAIN_LOOP_POLLING_INTERVAL_SECONDS) # This sleep is now much shorter
 
 # --- MAIN EXECUTION ---
 def main():
